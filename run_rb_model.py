@@ -8,7 +8,7 @@ from tqdm import tqdm
 import requests
 import argparse
 import onnxruntime as rt
-
+import time
 
 def load_single(oid_filename, feature_filename):
     oid     = np.memmap(oid_filename, mode='c', dtype=np.uint64)
@@ -49,6 +49,7 @@ def pred_from_onnx(model, data, return_label=False):
     if return_label:
         pred_label = session.run([label_name], {input_name: np.array(data).astype(np.float32)})[0]
     pred_proba = session.run([prob_name], {input_name: np.array(data).astype(np.float32)})[0]
+    pred_proba = np.float32([pred[1] for pred in pred_proba])
     return (pred_proba, pred_label) if return_label else pred_proba
 
 
@@ -59,14 +60,14 @@ def main():
 
     oids, features = load_single(args.oid, args.feature)
     t = time.monotonic()
-    predict_proba = pred_from_onnx(model, features)
+    predict = pred_from_onnx(model, features)
     t = (time.monotonic() - t) / 60
     print(f'Predicted probabilities for {len(oids)} objects in {t:.0f} m')
 
     if args.concat:
-        result = np.hstack((features, np.float32(predict_proba)))
+        result = np.hstack((features, predict))
     else:
-        result = np.float32(predict_proba)
+        result = predict
     with open(args.output, "wb") as binary_file:
             binary_file.write(result.tobytes())
 
