@@ -1,2 +1,1 @@
-## Draft
-Objects OIDs and labels (artefact/non-artefact) are taken from `akb.ztf.snad.space.json`. The idea is to use object features from [https://sai.snad.space/tmp/features](https://sai.snad.space/tmp/features) and labels for training real-bogus classifier.
+Objects OIDs and labels (artefact/non-artefact) are taken from [https://akb.ztf.snad.space/](https://akb.ztf.snad.space/). The idea is to use object features from [http://features.lc.snad.space/api/latest](http://features.lc.snad.space/api/latest) and labels from akb database for training real-bogus classifier.
