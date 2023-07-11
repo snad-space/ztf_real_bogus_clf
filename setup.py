@@ -19,7 +19,7 @@ requirements = [
 setup(
     name="RBclf",
     version="0.0.1",
-    author='Timofey Semenikhin'
+    author='Timofey Semenikhin',
     author_email="ofmafowo@gmail.com",
     description="Real-bogus classification for ZTF objects.",
     long_description=readme,
