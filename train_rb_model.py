@@ -12,16 +12,18 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, KFold, cross_validate, cross_val_score
 from sklearn import metrics
 import pandas as pd
+from tqdm import tqdm
 
 API_URL_EXTR = 'http://features.lc.snad.space/api/latest'
 
 def make_argument_parser():
     parser = argparse.ArgumentParser(description='Train real-bogus classification model for ZTF objects')
-    parser.add_argument('--featurenames', help='Name of the file with feature names, one name per line', default='snad6_features/feature_snad6_r_100.name')
-    parser.add_argument('--extrname', help='Name of the extractor file', default='feat_extr_snad6.json')
-    parser.add_argument('--modelname', help='Name for trained model.', default='rf_RBclf.onnx')
+    parser.add_argument('--featurenames', help='Name of the file with feature names, one name per line', required=True)
+    parser.add_argument('--extrname', help='Name of the extractor file', required=True)
+    parser.add_argument('--modelname', help='Name for trained model.', required=True)
     parser.add_argument('--d', help='Download LCs for akb objects or not.', type=bool, default=False)
     parser.add_argument('--extr', help='Extract features for akb objects or not.', type=bool, default=False)
+    parser.add_argument('--akbfeat', help='Name for saving extracted features.')
     parser.add_argument('--lcdir', help='Directory for saving LCs.', default='LCs')
     parser.add_argument('-s', '--random_seed', default=42, type=int, help='Fix the seed for reproducibility. Defaults to 42.')
     return parser
@@ -31,9 +33,14 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
+def download_extr(extr_name):
+    url = f'https://sai.snad.space/tmp/dr17-features/{extr_name}'
+    with requests.get(url) as response:
+        response.raise_for_status()
+        open(extr_name, 'wb').write(response.content)
 
 def download_lc(oid, dir):
-    url = 'http://db.ztf.snad.space/api/v3/data/dr4/oid/full/json?oid='
+    url = 'http://db.ztf.snad.space/api/v3/data/dr17/oid/full/json?oid='
     with requests.get(f'{url}{oid}') as response:
         response.raise_for_status()
         open(f'{dir}/{oid}.json', 'wb').write(response.content)
@@ -112,14 +119,15 @@ def get_oids(filepath):
 def convert_to_onnx(model, input_shape, name):    
     initial_type = [('float_input', FloatTensorType([None, input_shape]))]
     onx = convert_sklearn(model, initial_types=initial_type)
-    with open(name, "wb") as f:
+    with open(f'RBclf_{name}.onnx', "wb") as f:
         f.write(onx.SerializeToString())
 
 
 def get_feat(oids, labels, extractors, names, args):
     data = []
+    print('Extracting features from light curves...')
     t = time.monotonic()
-    for oid, label in zip(oids, labels):
+    for oid, label in tqdm(zip(oids, labels)):
         try:
             magn_lc = lc_from_json(oid, dir=args.lcdir)
             magn_features, flux_features = get_feat_single(magn_lc, extractors)
@@ -130,7 +138,7 @@ def get_feat(oids, labels, extractors, names, args):
     print(f'{len(oids) - len(data)} objects have problems with extracting features')
     all_features = pd.DataFrame(data=data, columns=['oid', 'label'] + names)
     
-    all_features.to_csv('akb_features.csv', index=False)
+    all_features.to_csv(f'akb_obj_features_{args.akbfeat}.csv', index=False)
     t = (time.monotonic() - t) / 60
     print(f'Features for {len(data)} extracted in {t:.0f} m')
     return all_features
@@ -147,15 +155,24 @@ def main():
             response.raise_for_status()
             open(f'akb.ztf.snad.space.json', 'wb').write(response.content)
         oids, labels = get_oids('akb.ztf.snad.space.json')
-        
+
+        try:
+            os.mkdir(args.lcdir)
+        except FileExistsError:
+            # directory already exists
+            pass
+
+        print('Downloading light curves...')
         t = time.monotonic()
-        for oid in oids:
+        for oid in tqdm(oids):
             download_lc(oid, dir=args.lcdir)
         t = (time.monotonic() - t) / 60
         print(f'LCs downloaded in {t:.0f} m')
 
     oids, labels = get_oids('akb.ztf.snad.space.json')
     #extractors
+    if not os.path.exists(args.extrname):
+        download_extr(args.extrname)
     file = open(args.extrname)
     extractors = json.load(file)
     file.close()
@@ -170,6 +187,7 @@ def main():
         data = pd.read_csv('akb_features.csv')
 
     # Train and validate real-bogus model
+    print('Training model...')
     t = time.monotonic()
     model = RandomForestClassifier(max_depth=18, n_estimators=831, random_state=args.random_seed)
     score_types = ('accuracy', 'roc_auc', 'f1')
