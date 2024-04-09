@@ -184,7 +184,7 @@ def main():
     if args.extr:
         data = get_feat(oids, labels, extractors, names, args)
     else:
-        data = pd.read_csv('akb_features.csv')
+        data = pd.read_csv(f'akb_obj_features_{args.akbfeat}.csv')
 
     # Train and validate real-bogus model
     print('Training model...')
