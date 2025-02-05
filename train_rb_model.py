@@ -25,6 +25,7 @@ def make_argument_parser():
     parser.add_argument('--extr', help='Extract features for akb objects or not.', type=bool, default=False)
     parser.add_argument('--akbfeat', help='Name for saving extracted features.')
     parser.add_argument('--lcdir', help='Directory for saving LCs.', default='LCs')
+    parser.add_argument('--akblist', help='Name of akb database file.', default=False)
     parser.add_argument('-s', '--random_seed', default=42, type=int, help='Fix the seed for reproducibility. Defaults to 42.')
     return parser
 
@@ -150,11 +151,14 @@ def main():
 
     #Download LCs for akb objects if needed
     if args.d:
-        url = f'https://akb.ztf.snad.space/objects/'
-        with requests.get(url) as response:
-            response.raise_for_status()
-            open(f'akb.ztf.snad.space.json', 'wb').write(response.content)
-        oids, labels = get_oids('akb.ztf.snad.space.json')
+        if args.akblist:
+            oids, labels = get_oids(args.akblist)
+        else:
+            url = f'https://akb.ztf.snad.space/objects/'
+            with requests.get(url) as response:
+                response.raise_for_status()
+                open(f'akb.ztf.snad.space.json', 'wb').write(response.content)
+            oids, labels = get_oids('akb.ztf.snad.space.json')
 
         try:
             os.mkdir(args.lcdir)
@@ -169,7 +173,12 @@ def main():
         t = (time.monotonic() - t) / 60
         print(f'LCs downloaded in {t:.0f} m')
 
-    oids, labels = get_oids('akb.ztf.snad.space.json')
+    else:
+        if args.akblist:
+            oids, labels = get_oids(args.akblist)
+        else:
+            oids, labels = get_oids('akb.ztf.snad.space.json')
+
     #extractors
     if not os.path.exists(args.extrname):
         download_extr(args.extrname)
@@ -184,7 +193,7 @@ def main():
     if args.extr:
         data = get_feat(oids, labels, extractors, names, args)
     else:
-        data = pd.read_csv('akb_features.csv')
+        data = pd.read_csv(f'akb_obj_features_{args.akbfeat}.csv')
 
     # Train and validate real-bogus model
     print('Training model...')

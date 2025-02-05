@@ -1,0 +1,6 @@
+snad4_features/
+LCs/
+expanded_features/
+.ipynb_checkpoints/
+models/
+catboost_info/
